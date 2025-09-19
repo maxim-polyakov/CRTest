@@ -83,13 +83,13 @@ app.get('/api/items', (req, res) => {
             filteredItems = cached.filteredItems;
             total = cached.total;
         } else {
-            // Фильтрация по поиску
+            // Фильтрация по поиску - ТОЧНОЕ СОВПАДЕНИЕ
             if (search) {
                 const searchLower = search.toLowerCase();
                 filteredItems = itemsState.items.filter(item =>
-                    item.name.toLowerCase().includes(searchLower) ||
-                    item.description.toLowerCase().includes(searchLower) ||
-                    item.value.toString().includes(search)
+                    item.name.toLowerCase() === searchLower ||
+                    item.description.toLowerCase() === searchLower ||
+                    item.value.toString() === search
                 );
             } else {
                 filteredItems = itemsState.items;
