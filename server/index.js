@@ -58,7 +58,7 @@ setInterval(() => {
 app.get('/api/items', (req, res) => {
     generateItems();
 
-    const { page = 1, limit = 20, search = '' } = req.query;
+    const { page = 1, limit = 20, search = '', searchField = 'name' } = req.query;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const startIndex = (pageNum - 1) * limitNum;
@@ -71,7 +71,7 @@ app.get('/api/items', (req, res) => {
     }
 
     // Ключ для кэширования
-    const cacheKey = `${search}-${JSON.stringify(itemsState.itemOrder)}`;
+    const cacheKey = `${search}-${searchField}-${JSON.stringify(itemsState.itemOrder)}`;
 
     try {
         let filteredItems;
@@ -83,14 +83,37 @@ app.get('/api/items', (req, res) => {
             filteredItems = cached.filteredItems;
             total = cached.total;
         } else {
-            // Фильтрация по поиску - ТОЧНОЕ СОВПАДЕНИЕ
+            // Фильтрация по поиску - ТОЧНОЕ СОВПАДЕНИЕ по указанному полю
             if (search) {
                 const searchLower = search.toLowerCase();
-                filteredItems = itemsState.items.filter(item =>
-                    item.name.toLowerCase() === searchLower ||
-                    item.description.toLowerCase() === searchLower ||
-                    item.value.toString() === search
-                );
+
+                switch (searchField) {
+                    case 'name':
+                        filteredItems = itemsState.items.filter(item =>
+                            item.name.toLowerCase() === searchLower
+                        );
+                        break;
+                    case 'description':
+                        filteredItems = itemsState.items.filter(item =>
+                            item.description.toLowerCase() === searchLower
+                        );
+                        break;
+                    case 'value':
+                        filteredItems = itemsState.items.filter(item =>
+                            item.value.toString() === search
+                        );
+                        break;
+                    case 'id':
+                        const searchId = parseInt(search);
+                        filteredItems = itemsState.items.filter(item =>
+                            item.id === searchId
+                        );
+                        break;
+                    default:
+                        filteredItems = itemsState.items.filter(item =>
+                            item.name.toLowerCase() === searchLower
+                        );
+                }
             } else {
                 filteredItems = itemsState.items;
             }
