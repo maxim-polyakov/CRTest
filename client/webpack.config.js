@@ -35,7 +35,7 @@ module.exports = {
         static: {
             directory: path.join(__dirname, 'public')
         },
-        port: 3001,
+        port: 3016,
         host: '0.0.0.0',
         hot: true,
         open: false,
@@ -45,7 +45,7 @@ module.exports = {
             webSocketURL: {
                 hostname: '0.0.0.0',
                 pathname: '/ws',
-                port: 3001
+                port: 3016
             }
         },
         webSocketServer: 'ws'
