@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Конфигурируемый базовый URL
-const API_BASE = 'http://localhost:5001/api';
+const API_BASE = 'https://crtestserver.baxic.ru/api';
 
 // Создаем экземпляр axios с базовыми настройками
 const apiClient = axios.create({
