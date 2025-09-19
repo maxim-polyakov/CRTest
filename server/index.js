@@ -87,6 +87,7 @@ app.get('/api/items', (req, res) => {
             if (search) {
                 const searchLower = search.toLowerCase();
                 filteredItems = itemsState.items.filter(item =>
+                    item.id.toLowerCase() === searchLower ||
                     item.name.toLowerCase() === searchLower ||
                     item.description.toLowerCase() === searchLower ||
                     item.value.toString() === search
