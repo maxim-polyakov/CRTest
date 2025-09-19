@@ -36,14 +36,19 @@ module.exports = {
             directory: path.join(__dirname, 'public')
         },
         port: 3001,
+        host: '0.0.0.0',
         hot: true,
+        open: false,
         historyApiFallback: true,
-        proxy: {
-            '/api': {
-                target: 'http://localhost:5000',
-                changeOrigin: true
+        allowedHosts: 'all',
+        client: {
+            webSocketURL: {
+                hostname: '0.0.0.0',
+                pathname: '/ws',
+                port: 3001
             }
-        }
+        },
+        webSocketServer: 'ws'
     },
     resolve: {
         extensions: ['.js', '.jsx']

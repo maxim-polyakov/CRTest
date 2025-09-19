@@ -1,12 +1,12 @@
 version: '3.8'
 services:
   client:
-    container_name: misadrawings_client
+    container_name: crclient
     build:
       dockerfile: Dockerfile
       context: .
     env_file:
       - .env
     ports:
-      - "3000:3000"
+      - "3001:3001"
     restart: unless-stopped

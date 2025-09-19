@@ -1,25 +1,44 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:5000/api';
+// Конфигурируемый базовый URL
+const API_BASE = 'http://localhost:5001/api';
+
+// Создаем экземпляр axios с базовыми настройками
+const apiClient = axios.create({
+    baseURL: API_BASE,
+    timeout: 10000,
+    headers: {
+        'Content-Type': 'application/json',
+    }
+});
+
+// Добавляем перехватчик для ошибок
+apiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        console.error('API Error:', error);
+        return Promise.reject(error);
+    }
+);
 
 export const itemsApi = {
     getItems: async (page, limit, search = '') => {
-        const response = await axios.get(`${API_BASE}/items`, {
+        const response = await apiClient.get('/items', {
             params: { page, limit, search }
         });
         return response.data;
     },
 
     saveOrder: async (itemOrder) => {
-        await axios.post(`${API_BASE}/items/order`, { itemOrder });
+        await apiClient.post('/items/order', { itemOrder });
     },
 
     saveSelection: async (selectedItems) => {
-        await axios.post(`${API_BASE}/items/selection`, { selectedItems });
+        await apiClient.post('/items/selection', { selectedItems });
     },
 
     getState: async () => {
-        const response = await axios.get(`${API_BASE}/state`);
+        const response = await apiClient.get('/state');
         return response.data;
     }
 };
