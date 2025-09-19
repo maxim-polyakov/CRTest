@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { ItemTable } from './components/ItemTable/ItemTable';
 import { useItems } from './hooks/useItems';
+import './styles.css'
 
 function App() {
     const {

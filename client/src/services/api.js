@@ -1,4 +1,5 @@
 import axios from 'axios';
+import '../styles.css'
 
 // Конфигурируемый базовый URL
 const API_BASE = 'https://crtestserver.baxic.ru/api';

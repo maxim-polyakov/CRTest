@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { itemsApi } from '../services/api';
 import { useDebounce } from './useDebounce';
 import { useInfiniteScroll } from './useInfiniteScroll';
+import '../styles.css'
 
 export function useItems() {
     const [items, setItems] = useState([]);

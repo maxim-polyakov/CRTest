@@ -1,8 +1,9 @@
 import React from 'react';
+import '../../styles.css';
 
 export const ItemRow = React.memo(({ item, isSelected, onSelect }) => (
     <tr
-        data-id={item.id}
+        data-id={item.id} // Важно: data-id для получения ID:cite[4]
         className={isSelected ? 'selected' : ''}
     >
         <td className="checkbox-cell">
@@ -17,7 +18,9 @@ export const ItemRow = React.memo(({ item, isSelected, onSelect }) => (
         <td>{item.description}</td>
         <td>{item.value}</td>
         <td>
-            <span className="drag-handle">☰</span>
+            <span className="drag-handle" title="Перетащите для изменения порядка">
+                ☰
+            </span>
         </td>
     </tr>
 ));
