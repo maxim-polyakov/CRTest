@@ -37,13 +37,13 @@ module.exports = {
         },
         port: 3016,
         host: '0.0.0.0',
-        // Полностью отключаем WebSocket и Hot Reload
-        hot: false,
-        liveReload: false,
+        hot: true,
         open: false,
         historyApiFallback: true,
         allowedHosts: 'all',
-        // Явно отключаем WebSocket сервер
+        // Отключаем WebSocket для hot reload
+        hot: false,
+        liveReload: true,
         webSocketServer: false,
         client: {
             // Отключаем WebSocket клиент
