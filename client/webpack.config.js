@@ -37,13 +37,19 @@ module.exports = {
         },
         port: 3016,
         host: '0.0.0.0',
-        hot: true,
+        // Полностью отключаем WebSocket и Hot Reload
+        hot: false,
+        liveReload: false,
         open: false,
         historyApiFallback: true,
         allowedHosts: 'all',
-        // Отключаем WebSocket для hot reload
-        hot: false,
-        liveReload: true
+        // Явно отключаем WebSocket сервер
+        webSocketServer: false,
+        client: {
+            // Отключаем WebSocket клиент
+            webSocketURL: false,
+            logging: 'none'
+        }
     },
     resolve: {
         extensions: ['.js', '.jsx']
