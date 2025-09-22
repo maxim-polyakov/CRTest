@@ -31,25 +31,6 @@ module.exports = {
             template: './public/index.html'
         })
     ],
-    devServer: {
-        static: {
-            directory: path.join(__dirname, 'public')
-        },
-        port: 3016,
-        host: '0.0.0.0',
-        hot: true,
-        open: false,
-        historyApiFallback: true,
-        allowedHosts: 'all',
-        client: {
-            webSocketURL: {
-                hostname: '0.0.0.0',
-                pathname: '/ws',
-                port: 3016
-            }
-        },
-        webSocketServer: 'ws'
-    },
     resolve: {
         extensions: ['.js', '.jsx']
     }
