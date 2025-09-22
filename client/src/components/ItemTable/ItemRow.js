@@ -3,7 +3,8 @@ import '../../styles.css';
 
 export const ItemRow = React.memo(({ item, isSelected, onSelect }) => (
     <tr
-        data-id={item.id} // Важно: data-id для получения ID:cite[4]
+        key={item.id} // Добавьте key здесь
+        data-id={item.id}
         className={isSelected ? 'selected' : ''}
     >
         <td className="checkbox-cell">

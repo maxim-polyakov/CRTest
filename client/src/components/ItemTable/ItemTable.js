@@ -21,38 +21,53 @@ export const ItemTable = ({
                           }) => {
     const tableBodyRef = useRef(null);
     const sortableRef = useRef(null);
+    const itemsRef = useRef(items);
+
+    // Обновляем ref при изменении items
+    useEffect(() => {
+        itemsRef.current = items;
+    }, [items]);
 
     useEffect(() => {
-        // Убедитесь, что элементы есть и Sortable еще не инициализирован
-        if (tableBodyRef.current && items.length > 0 && !sortableRef.current) {
+        if (!tableBodyRef.current) return;
+
+        // Уничтожаем старый экземпляр Sortable при каждом обновлении
+        if (sortableRef.current) {
+            sortableRef.current.destroy();
+            sortableRef.current = null;
+        }
+
+        // Создаем новый экземпляр Sortable только если есть элементы
+        if (items.length > 0) {
             sortableRef.current = Sortable.create(tableBodyRef.current, {
-                handle: '.drag-handle', // Указываем элемент-хэндл для перетаскивания:cite[2]
-                ghostClass: 'sortable-ghost', // Класс для элемента-призрака
-                animation: 150, // Добавляем анимацию:cite[5]
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                animation: 150,
                 onStart: function (evt) {
-                    // Добавляем визуальную обратную связь
                     evt.item.classList.add('sortable-drag');
                 },
                 onEnd: function (evt) {
-                    // Убираем класс после завершения
                     evt.item.classList.remove('sortable-drag');
 
                     // Получаем новый порядок элементов
                     const rows = Array.from(tableBodyRef.current.children);
-                    const newOrder = rows.map(row => parseInt(row.dataset.id));
+                    const newOrder = rows.map(row => {
+                        const id = parseInt(row.dataset.id);
+                        // Проверяем валидность ID
+                        if (isNaN(id)) {
+                            console.error('Invalid ID found:', row.dataset.id);
+                            return null;
+                        }
+                        return id;
+                    }).filter(id => id !== null);
 
                     // Проверяем, что порядок изменился
-                    const oldOrder = items.map(item => item.id);
-                    if (JSON.stringify(newOrder) !== JSON.stringify(oldOrder)) {
+                    const currentOrder = itemsRef.current.map(item => item.id);
+                    if (JSON.stringify(newOrder) !== JSON.stringify(currentOrder)) {
                         onOrderChange(newOrder);
                     }
                 }
             });
-        }
-
-        // Обновляем Sortable при изменении элементов
-        if (sortableRef.current && items.length > 0) {
-            sortableRef.current.option('disabled', false);
         }
 
         return () => {
@@ -61,9 +76,33 @@ export const ItemTable = ({
                 sortableRef.current = null;
             }
         };
-    }, [items, onOrderChange]); // Добавляем items в зависимости
+    }, [items, onOrderChange]); // items в зависимостях
 
-    const allSelected = items.length > 0 && items.every(item => selectedItems.has(item.id));
+    const allSelected = items.length > 0 && selectedItems.size > 0 &&
+        items.every(item => selectedItems.has(item.id));
+
+    // Функция для проверки уникальности ID
+    const checkDuplicateIds = () => {
+        const ids = items.map(item => item.id);
+        const uniqueIds = new Set(ids);
+
+        if (ids.length !== uniqueIds.size) {
+            console.warn('Обнаружены дублирующиеся ID:', {
+                totalItems: items.length,
+                uniqueIds: uniqueIds.size,
+                duplicates: ids.filter((id, index) => ids.indexOf(id) !== index)
+            });
+            return false;
+        }
+        return true;
+    };
+
+    // Проверяем уникальность ID при рендере
+    useEffect(() => {
+        if (items.length > 0) {
+            checkDuplicateIds();
+        }
+    }, [items]);
 
     return (
         <div className="container">
@@ -78,6 +117,11 @@ export const ItemTable = ({
             <div className="stats">
                 Найдено: {totalCount} элементов |
                 Выбрано: {selectedItems.size}
+                {items.length > 0 && !checkDuplicateIds() && (
+                    <span style={{color: 'red', marginLeft: '10px'}}>
+                        ⚠️ Обнаружены дублирующиеся ID!
+                    </span>
+                )}
             </div>
 
             <div className="table-container">
@@ -88,9 +132,9 @@ export const ItemTable = ({
                         onSort={onSort}
                     />
                     <tbody ref={tableBodyRef}>
-                    {items.map(item => (
+                    {items.map((item, index) => (
                         <ItemRow
-                            key={item.id}
+                            key={`${item.id}-${index}`} // Комбинированный ключ для безопасности
                             item={item}
                             isSelected={selectedItems.has(item.id)}
                             onSelect={onSelect}

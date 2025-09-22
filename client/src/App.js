@@ -29,10 +29,11 @@ function App() {
         }
     }, [sortField]);
 
+    // Исправленная функция сортировки с проверкой уникальности ID
     const sortedItems = useMemo(() => {
         if (!sortField) return items;
 
-        return [...items].sort((a, b) => {
+        const sorted = [...items].sort((a, b) => {
             const aValue = a[sortField];
             const bValue = b[sortField];
 
@@ -46,7 +47,31 @@ function App() {
                 ? aValue - bValue
                 : bValue - aValue;
         });
+
+        // Проверка на дублирующиеся ID после сортировки
+        const ids = sorted.map(item => item.id);
+        const uniqueIds = new Set(ids);
+
+        if (ids.length !== uniqueIds.size) {
+            console.warn('Обнаружены дублирующиеся ID после сортировки!', {
+                field: sortField,
+                direction: sortDirection,
+                duplicates: ids.filter((id, index) => ids.indexOf(id) !== index)
+            });
+        }
+
+        return sorted;
     }, [items, sortField, sortDirection]);
+
+    // Функция для обработки изменения порядка с учетом сортировки
+    const handleOrderChange = useCallback((newOrder) => {
+        // Если активна сортировка, игнорируем изменение порядка через перетаскивание
+        if (sortField) {
+            console.warn('Изменение порядка отключено при активной сортировке');
+            return;
+        }
+        updateItemOrder(newOrder);
+    }, [sortField, updateItemOrder]);
 
     return (
         <div style={{ padding: '20px', background: '#f5f5f5', minHeight: '100vh' }}>
@@ -61,7 +86,7 @@ function App() {
                 onSelect={toggleSelection}
                 onSelectAll={toggleSelectAll}
                 onSort={handleSort}
-                onOrderChange={updateItemOrder}
+                onOrderChange={handleOrderChange}
             />
         </div>
     );
