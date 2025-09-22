@@ -87,7 +87,7 @@ app.get('/api/items', (req, res) => {
             if (search) {
                 const searchLower = search.toLowerCase();
                 filteredItems = itemsState.items.filter(item =>
-                    item.id.toString() === search
+                    item.id.toString().includes(search)
                 );
             } else {
                 filteredItems = itemsState.items;
