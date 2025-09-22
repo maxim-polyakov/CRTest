@@ -89,7 +89,7 @@ app.get('/api/items', (req, res) => {
                 filteredItems = itemsState.items.filter(item =>
                     item.name.toLowerCase() === searchLower ||
                     item.description.toLowerCase() === searchLower ||
-                    item.value.toString() === search
+                    item.value.toString().includes(search)
                 );
             } else {
                 filteredItems = itemsState.items;
