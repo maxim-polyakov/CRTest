@@ -8,7 +8,7 @@ export const SearchBar = ({ searchTerm, onSearchChange, onClearSearch }) => (
             className="search-input"
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Поиск по имени, описанию или значению..."
+            placeholder="Поиск по id"
         />
         <button onClick={onClearSearch}>
             Очистить
