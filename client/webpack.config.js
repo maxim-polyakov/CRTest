@@ -37,18 +37,16 @@ module.exports = {
         },
         port: 3016,
         host: '0.0.0.0',
-        hot: true,
+        // Убрано дублирование hot: true и hot: false
+        hot: false, // Отключаем hot reload
         open: false,
         historyApiFallback: true,
-        allowedHosts: 'all',
-        // Отключаем WebSocket для hot reload
-        hot: false,
+        allowedHosts: 'all', // Это допустимое значение
         liveReload: true,
         webSocketServer: false,
-        client: {
-            // Отключаем WebSocket клиент
-            webSocketURL: false,
-            logging: 'none'
+        // Добавляем devMiddleware для совместимости
+        devMiddleware: {
+            publicPath: '/'
         }
     },
     resolve: {
