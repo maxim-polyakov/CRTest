@@ -40,7 +40,10 @@ module.exports = {
         hot: true,
         open: false,
         historyApiFallback: true,
-        allowedHosts: 'all'
+        allowedHosts: 'all',
+        // Отключаем WebSocket для hot reload
+        hot: false,
+        liveReload: true
     },
     resolve: {
         extensions: ['.js', '.jsx']
