@@ -13,6 +13,7 @@ export function useItems() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [itemOrder, setItemOrder] = useState([]);
+    const [sortBy, setSortBy] = useState('id'); // Новое состояние для сортировки
 
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -56,30 +57,47 @@ export function useItems() {
         return fixedItems;
     }, [currentPage]);
 
+    // Функция для сортировки элементов по ID
+    const sortItemsById = useCallback((itemsArray) => {
+        return [...itemsArray].sort((a, b) => {
+            // Учитываем разные типы ID (числа и строки)
+            if (typeof a.id === 'number' && typeof b.id === 'number') {
+                return a.id - b.id;
+            }
+            return String(a.id).localeCompare(String(b.id));
+        });
+    }, []);
+
     const loadItems = useCallback(async (page = 1, isNewSearch = false) => {
         if (isLoading) return;
 
         setIsLoading(true);
         try {
-            // Используем актуальный поисковый запрос
-            const response = await itemsApi.getItems(page, 20, debouncedSearchTerm);
+            // Добавляем параметр сортировки в API запрос
+            const response = await itemsApi.getItems(page, 20, debouncedSearchTerm, 'id'); // 'id' как параметр сортировки
 
             const validatedItems = validateAndFixItems(
                 response.items,
                 isNewSearch ? [] : items
             );
 
+            // Сортируем элементы по ID после загрузки
+            const sortedItems = sortItemsById(validatedItems);
+
             if (isNewSearch || page === 1) {
-                setItems(validatedItems);
+                setItems(sortedItems);
             } else {
                 const existingIds = new Set(items.map(item => item.id));
-                const uniqueNewItems = validatedItems.filter(item => !existingIds.has(item.id));
+                const uniqueNewItems = sortedItems.filter(item => !existingIds.has(item.id));
 
-                if (uniqueNewItems.length !== validatedItems.length) {
+                if (uniqueNewItems.length !== sortedItems.length) {
                     console.warn('Отфильтрованы дублирующиеся элементы при пагинации');
                 }
 
-                setItems(prev => [...prev, ...uniqueNewItems]);
+                // Объединяем и сортируем все элементы
+                const allItems = [...items, ...uniqueNewItems];
+                const finalSortedItems = sortItemsById(allItems);
+                setItems(finalSortedItems);
             }
 
             setHasMore(response.hasMore);
@@ -88,9 +106,10 @@ export function useItems() {
 
             console.log('Загружены элементы:', {
                 page: page,
-                search: debouncedSearchTerm, // Добавили поиск в лог
-                items: validatedItems.length,
-                total: response.total
+                search: debouncedSearchTerm,
+                items: sortedItems.length,
+                total: response.total,
+                sortBy: 'id' // Добавляем информацию о сортировке в лог
             });
 
         } catch (error) {
@@ -98,7 +117,7 @@ export function useItems() {
         } finally {
             setIsLoading(false);
         }
-    }, [isLoading, items, validateAndFixItems, debouncedSearchTerm]); // Добавили debouncedSearchTerm в зависимости
+    }, [isLoading, items, validateAndFixItems, debouncedSearchTerm, sortItemsById]);
 
     const loadMore = useCallback(() => {
         if (hasMore && !isLoading) {
@@ -108,16 +127,12 @@ export function useItems() {
 
     useInfiniteScroll(loadMore);
 
-    // Ключевое исправление: перезагружаем данные при изменении поиска
     useEffect(() => {
-        // Сбрасываем состояние перед новым поиском
         setItems([]);
         setCurrentPage(1);
         setHasMore(true);
-
-        // Загружаем данные с новым поисковым запросом
         loadItems(1, true);
-    }, [debouncedSearchTerm]); // Зависимость от debouncedSearchTerm
+    }, [debouncedSearchTerm]);
 
     useEffect(() => {
         const loadState = async () => {
@@ -202,17 +217,24 @@ export function useItems() {
         await itemsApi.saveOrder(validOrder);
     }, [items]);
 
-    // Функция очистки поиска - теперь она работает правильно
-    const clearSearch = useCallback(() => {
-        setSearchTerm('');
-        // Данные автоматически перезагрузятся через useEffect с debouncedSearchTerm
+    // Функция для изменения способа сортировки
+    const changeSortOrder = useCallback((newSortBy) => {
+        setSortBy(newSortBy);
+        // При изменении сортировки перезагружаем данные
+        setItems([]);
+        setCurrentPage(1);
+        setHasMore(true);
+        // Здесь можно добавить логику для разных типов сортировки
     }, []);
 
-    // Функция перезагрузки данных
+    const clearSearch = useCallback(() => {
+        setSearchTerm('');
+    }, []);
+
     const refreshData = useCallback(() => {
         setItems([]);
         setCurrentPage(1);
-        setSearchTerm(''); // Сбрасываем поиск при перезагрузке
+        setSearchTerm('');
         loadItems(1, true);
     }, [loadItems]);
 
@@ -225,11 +247,13 @@ export function useItems() {
         hasMore,
         totalCount,
         itemOrder,
+        sortBy, // Экспортируем текущий способ сортировки
         toggleSelection,
         toggleSelectAll,
         updateItemOrder,
         clearSearch,
         loadMore,
-        refreshData
+        refreshData,
+        changeSortOrder // Экспортируем функцию изменения сортировки
     };
 }
