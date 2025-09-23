@@ -13,7 +13,6 @@ export function useItems() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [itemOrder, setItemOrder] = useState([]);
-    const [sortBy, setSortBy] = useState('id'); // Новое состояние для сортировки
 
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -57,46 +56,55 @@ export function useItems() {
         return fixedItems;
     }, [currentPage]);
 
-    // Функция для сортировки элементов по ID
+    // Функция для сортировки по ID (числа и строки)
     const sortItemsById = useCallback((itemsArray) => {
         return [...itemsArray].sort((a, b) => {
-            // Учитываем разные типы ID (числа и строки)
+            // Для числовых ID
             if (typeof a.id === 'number' && typeof b.id === 'number') {
                 return a.id - b.id;
             }
-            return String(a.id).localeCompare(String(b.id));
+            // Для строковых ID или смешанных типов
+            return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
         });
     }, []);
 
-    const loadItems = useCallback(async (page = 1, isNewSearch = false) => {
+    const loadItems = useCallback(async (page = 1, isNewSearch = false, shouldSort = true) => {
         if (isLoading) return;
 
         setIsLoading(true);
         try {
-            // Добавляем параметр сортировки в API запрос
-            const response = await itemsApi.getItems(page, 20, debouncedSearchTerm, 'id'); // 'id' как параметр сортировки
+            // Запрашиваем сортировку по ID с сервера
+            const response = await itemsApi.getItems(page, 20, debouncedSearchTerm, 'id');
 
             const validatedItems = validateAndFixItems(
                 response.items,
                 isNewSearch ? [] : items
             );
 
-            // Сортируем элементы по ID после загрузки
-            const sortedItems = sortItemsById(validatedItems);
+            let processedItems = validatedItems;
+
+            // Сортируем только если это новая загрузка или первая страница
+            if (shouldSort && (isNewSearch || page === 1)) {
+                processedItems = sortItemsById(validatedItems);
+            }
 
             if (isNewSearch || page === 1) {
-                setItems(sortedItems);
+                setItems(processedItems);
             } else {
+                // Для последующих страниц просто добавляем к существующим
                 const existingIds = new Set(items.map(item => item.id));
-                const uniqueNewItems = sortedItems.filter(item => !existingIds.has(item.id));
+                const uniqueNewItems = processedItems.filter(item =>
+                    !existingIds.has(item.id)
+                );
 
-                if (uniqueNewItems.length !== sortedItems.length) {
+                if (uniqueNewItems.length !== processedItems.length) {
                     console.warn('Отфильтрованы дублирующиеся элементы при пагинации');
                 }
 
-                // Объединяем и сортируем все элементы
+                // Объединяем и пересортируем ВСЕ элементы
                 const allItems = [...items, ...uniqueNewItems];
                 const finalSortedItems = sortItemsById(allItems);
+
                 setItems(finalSortedItems);
             }
 
@@ -107,9 +115,9 @@ export function useItems() {
             console.log('Загружены элементы:', {
                 page: page,
                 search: debouncedSearchTerm,
-                items: sortedItems.length,
+                items: processedItems.length,
                 total: response.total,
-                sortBy: 'id' // Добавляем информацию о сортировке в лог
+                sorted: shouldSort
             });
 
         } catch (error) {
@@ -121,17 +129,20 @@ export function useItems() {
 
     const loadMore = useCallback(() => {
         if (hasMore && !isLoading) {
-            loadItems(currentPage + 1, false);
+            loadItems(currentPage + 1, false, true); // Всегда сортируем при подгрузке
         }
     }, [hasMore, isLoading, currentPage, loadItems]);
 
     useInfiniteScroll(loadMore);
 
+    // Загружаем сначала элементы с меньшими ID
     useEffect(() => {
         setItems([]);
         setCurrentPage(1);
         setHasMore(true);
-        loadItems(1, true);
+
+        // Загружаем первую страницу с сортировкой
+        loadItems(1, true, true);
     }, [debouncedSearchTerm]);
 
     useEffect(() => {
@@ -157,6 +168,12 @@ export function useItems() {
 
         loadState();
     }, []);
+
+    // Сброс фильтрации при перезагрузке страницы
+    useEffect(() => {
+        // Этот эффект выполнится только при первоначальной загрузке компонента
+        setSearchTerm(''); // Сбрасываем поисковый запрос
+    }, []); // Пустой массив зависимостей = выполняется только при монтировании
 
     const toggleSelection = useCallback(async (id) => {
         if (!id) {
@@ -217,15 +234,11 @@ export function useItems() {
         await itemsApi.saveOrder(validOrder);
     }, [items]);
 
-    // Функция для изменения способа сортировки
-    const changeSortOrder = useCallback((newSortBy) => {
-        setSortBy(newSortBy);
-        // При изменении сортировки перезагружаем данные
-        setItems([]);
-        setCurrentPage(1);
-        setHasMore(true);
-        // Здесь можно добавить логику для разных типов сортировки
-    }, []);
+    // Функция для принудительной пересортировки
+    const reorderItems = useCallback(() => {
+        const sortedItems = sortItemsById(items);
+        setItems(sortedItems);
+    }, [items, sortItemsById]);
 
     const clearSearch = useCallback(() => {
         setSearchTerm('');
@@ -234,8 +247,8 @@ export function useItems() {
     const refreshData = useCallback(() => {
         setItems([]);
         setCurrentPage(1);
-        setSearchTerm('');
-        loadItems(1, true);
+        setSearchTerm(''); // Сбрасываем поиск при ручной перезагрузке
+        loadItems(1, true, true);
     }, [loadItems]);
 
     return {
@@ -247,13 +260,12 @@ export function useItems() {
         hasMore,
         totalCount,
         itemOrder,
-        sortBy, // Экспортируем текущий способ сортировки
         toggleSelection,
         toggleSelectAll,
         updateItemOrder,
         clearSearch,
         loadMore,
         refreshData,
-        changeSortOrder // Экспортируем функцию изменения сортировки
+        reorderItems
     };
 }
