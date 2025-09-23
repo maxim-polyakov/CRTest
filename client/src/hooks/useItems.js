@@ -6,7 +6,6 @@ import '../styles.css'
 
 export function useItems() {
     const [items, setItems] = useState([]);
-    const [filteredItems, setFilteredItems] = useState([]);
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +16,6 @@ export function useItems() {
 
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-    // Функция для проверки и исправления дублирующихся ID
     const validateAndFixItems = useCallback((newItems, existingItems = []) => {
         if (!Array.isArray(newItems)) return [];
 
@@ -25,7 +23,6 @@ export function useItems() {
         const idMap = new Map();
         const duplicates = new Set();
 
-        // Находим дубликаты
         allItems.forEach(item => {
             if (item && item.id !== undefined) {
                 if (idMap.has(item.id)) {
@@ -36,12 +33,10 @@ export function useItems() {
             }
         });
 
-        // Исправляем дубликаты в новых элементах
         const fixedItems = newItems.map((item, index) => {
             if (!item || item.id === undefined) return item;
 
             if (duplicates.has(item.id) || existingItems.some(existing => existing.id === item.id)) {
-                // Создаем уникальный ID добавляя индекс и временную метку
                 const uniqueId = `${item.id}-page${currentPage}-idx${index}-${Date.now()}`;
                 console.warn('Исправлен дублирующийся ID:', {
                     originalId: item.id,
@@ -55,12 +50,7 @@ export function useItems() {
         });
 
         if (duplicates.size > 0) {
-            console.warn('Обнаружены дублирующиеся ID:', {
-                duplicates: Array.from(duplicates),
-                totalItems: allItems.length,
-                newItems: newItems.length,
-                existingItems: existingItems.length
-            });
+            console.warn('Обнаружены дублирующиеся ID:', Array.from(duplicates));
         }
 
         return fixedItems;
@@ -71,9 +61,9 @@ export function useItems() {
 
         setIsLoading(true);
         try {
+            // Используем актуальный поисковый запрос
             const response = await itemsApi.getItems(page, 20, debouncedSearchTerm);
 
-            // Валидируем и исправляем элементы
             const validatedItems = validateAndFixItems(
                 response.items,
                 isNewSearch ? [] : items
@@ -81,37 +71,26 @@ export function useItems() {
 
             if (isNewSearch || page === 1) {
                 setItems(validatedItems);
-                setFilteredItems(validatedItems);
             } else {
-                // Проверяем на дубликаты при добавлении новых элементов
                 const existingIds = new Set(items.map(item => item.id));
-                const uniqueNewItems = validatedItems.filter(item =>
-                    !existingIds.has(item.id)
-                );
+                const uniqueNewItems = validatedItems.filter(item => !existingIds.has(item.id));
 
                 if (uniqueNewItems.length !== validatedItems.length) {
-                    console.warn('Отфильтрованы дублирующиеся элементы при пагинации:', {
-                        received: validatedItems.length,
-                        added: uniqueNewItems.length
-                    });
+                    console.warn('Отфильтрованы дублирующиеся элементы при пагинации');
                 }
 
                 setItems(prev => [...prev, ...uniqueNewItems]);
-                setFilteredItems(prev => [...prev, ...uniqueNewItems]);
             }
 
             setHasMore(response.hasMore);
             setCurrentPage(page);
             setTotalCount(response.total);
 
-            // Логируем для отладки
             console.log('Загружены элементы:', {
                 page: page,
-                search: debouncedSearchTerm,
-                received: response.items.length,
-                validated: validatedItems.length,
-                total: response.total,
-                hasMore: response.hasMore
+                search: debouncedSearchTerm, // Добавили поиск в лог
+                items: validatedItems.length,
+                total: response.total
             });
 
         } catch (error) {
@@ -119,7 +98,7 @@ export function useItems() {
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearchTerm, isLoading, items, validateAndFixItems]);
+    }, [isLoading, items, validateAndFixItems, debouncedSearchTerm]); // Добавили debouncedSearchTerm в зависимости
 
     const loadMore = useCallback(() => {
         if (hasMore && !isLoading) {
@@ -129,23 +108,28 @@ export function useItems() {
 
     useInfiniteScroll(loadMore);
 
+    // Ключевое исправление: перезагружаем данные при изменении поиска
     useEffect(() => {
+        // Сбрасываем состояние перед новым поиском
+        setItems([]);
+        setCurrentPage(1);
+        setHasMore(true);
+
+        // Загружаем данные с новым поисковым запросом
         loadItems(1, true);
-    }, [debouncedSearchTerm]);
+    }, [debouncedSearchTerm]); // Зависимость от debouncedSearchTerm
 
     useEffect(() => {
         const loadState = async () => {
             try {
                 const state = await itemsApi.getState();
 
-                // Валидируем выбранные элементы
                 const validSelectedItems = Array.isArray(state.selectedItems)
                     ? state.selectedItems.filter(id => id !== undefined && id !== null)
                     : [];
 
                 setSelectedItems(new Set(validSelectedItems));
 
-                // Валидируем порядок элементов
                 const validItemOrder = Array.isArray(state.itemOrder)
                     ? state.itemOrder.filter(id => id !== undefined && id !== null)
                     : [];
@@ -173,7 +157,6 @@ export function useItems() {
                 newSelected.add(id);
             }
 
-            // Сохраняем только валидные ID
             const validSelection = Array.from(newSelected).filter(itemId =>
                 itemId !== undefined && itemId !== null
             );
@@ -186,7 +169,7 @@ export function useItems() {
     const toggleSelectAll = useCallback(async (selectAll) => {
         setSelectedItems(prev => {
             const newSelected = new Set(prev);
-            const visibleIds = filteredItems
+            const visibleIds = items
                 .map(item => item.id)
                 .filter(id => id !== undefined && id !== null);
 
@@ -199,7 +182,7 @@ export function useItems() {
             itemsApi.saveSelection(Array.from(newSelected));
             return newSelected;
         });
-    }, [filteredItems]);
+    }, [items]);
 
     const updateItemOrder = useCallback(async (newOrder) => {
         if (!Array.isArray(newOrder)) {
@@ -207,36 +190,34 @@ export function useItems() {
             return;
         }
 
-        // Фильтруем валидные ID
         const validOrder = newOrder.filter(id =>
             id !== undefined && id !== null && items.some(item => item.id === id)
         );
 
         if (validOrder.length !== newOrder.length) {
-            console.warn('Отфильтрованы невалидные ID при изменении порядка:', {
-                original: newOrder.length,
-                valid: validOrder.length
-            });
+            console.warn('Отфильтрованы невалидные ID при изменении порядка');
         }
 
         setItemOrder(validOrder);
         await itemsApi.saveOrder(validOrder);
     }, [items]);
 
+    // Функция очистки поиска - теперь она работает правильно
     const clearSearch = useCallback(() => {
         setSearchTerm('');
+        // Данные автоматически перезагрузятся через useEffect с debouncedSearchTerm
     }, []);
 
-    // Функция для принудительной перезагрузки данных
+    // Функция перезагрузки данных
     const refreshData = useCallback(() => {
         setItems([]);
-        setFilteredItems([]);
         setCurrentPage(1);
+        setSearchTerm(''); // Сбрасываем поиск при перезагрузке
         loadItems(1, true);
     }, [loadItems]);
 
     return {
-        items: filteredItems,
+        items: items,
         selectedItems,
         searchTerm,
         setSearchTerm,
@@ -249,6 +230,6 @@ export function useItems() {
         updateItemOrder,
         clearSearch,
         loadMore,
-        refreshData // Добавляем функцию для перезагрузки
+        refreshData
     };
 }
