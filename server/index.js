@@ -56,7 +56,6 @@ setInterval(() => {
 
 // Получение элементов с пагинацией и оптимизацией
 app.get('/api/items', (req, res) => {
-    generateItems();
 
     const { page = 1, limit = 20, search = '' } = req.query;
     const pageNum = parseInt(page);
@@ -83,20 +82,22 @@ app.get('/api/items', (req, res) => {
             filteredItems = cached.filteredItems;
             total = cached.total;
         } else {
-            // Фильтрация по поиску - ТОЧНОЕ СОВПАДЕНИЕ
-            if (search) {
-                const searchLower = search.toLowerCase();
+            // Фильтрация по поиску - ИСПРАВЛЕННЫЙ ПОИСК
+            if (search && search.trim() !== '') {
+                const searchTerm = search.trim().toLowerCase();
                 filteredItems = itemsState.items.filter(item =>
-                    item.id.toString().includes(search)
+                    item.name && item.name.toLowerCase().includes(searchTerm) ||
+                    item.id.toString().toLowerCase().includes(searchTerm) ||
+                    (item.description && item.description.toLowerCase().includes(searchTerm))
                 );
             } else {
-                filteredItems = itemsState.items;
+                filteredItems = [...itemsState.items]; // создаем копию
             }
 
             total = filteredItems.length;
 
-            // Применение пользовательского порядка
-            if (itemsState.itemOrder.length > 0) {
+            // Применение пользовательского порядка ТОЛЬКО если нет поиска
+            if (itemsState.itemOrder.length > 0 && !search) {
                 const orderMap = new Map();
                 itemsState.itemOrder.forEach((id, index) => orderMap.set(id, index));
 
@@ -105,6 +106,9 @@ app.get('/api/items', (req, res) => {
                     const orderB = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
                     return orderA - orderB;
                 });
+            } else if (!search) {
+                // Если нет пользовательского порядка и нет поиска - сортируем по ID
+                filteredItems.sort((a, b) => a.id - b.id);
             }
 
             // Кэшируем результат поиска

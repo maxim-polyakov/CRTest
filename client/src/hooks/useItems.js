@@ -6,6 +6,7 @@ import '../styles.css'
 
 export function useItems() {
     const [items, setItems] = useState([]);
+    const [filteredItems, setFilteredItems] = useState([]);
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -16,96 +17,32 @@ export function useItems() {
 
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-    const validateAndFixItems = useCallback((newItems, existingItems = []) => {
-        if (!Array.isArray(newItems)) return [];
-
-        const allItems = [...existingItems, ...newItems];
-        const idMap = new Map();
-        const duplicates = new Set();
-
-        allItems.forEach(item => {
-            if (item && item.id !== undefined) {
-                if (idMap.has(item.id)) {
-                    duplicates.add(item.id);
-                } else {
-                    idMap.set(item.id, item);
-                }
-            }
-        });
-
-        const fixedItems = newItems.map((item, index) => {
-            if (!item || item.id === undefined) return item;
-
-            if (duplicates.has(item.id) || existingItems.some(existing => existing.id === item.id)) {
-                const uniqueId = `${item.id}-page${currentPage}-idx${index}-${Date.now()}`;
-                console.warn('Исправлен дублирующийся ID:', {
-                    originalId: item.id,
-                    newId: uniqueId,
-                    page: currentPage,
-                    index: index
-                });
-                return { ...item, id: uniqueId };
-            }
-            return item;
-        });
-
-        if (duplicates.size > 0) {
-            console.warn('Обнаружены дублирующиеся ID:', Array.from(duplicates));
-        }
-
-        return fixedItems;
-    }, [currentPage]);
-
-    // Функция для сортировки по ID (числа и строки)
-    const sortItemsById = useCallback((itemsArray) => {
-        return [...itemsArray].sort((a, b) => {
-            // Для числовых ID
-            if (typeof a.id === 'number' && typeof b.id === 'number') {
-                return a.id - b.id;
-            }
-            // Для строковых ID или смешанных типов
-            return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
-        });
-    }, []);
-
-    const loadItems = useCallback(async (page = 1, isNewSearch = false, shouldSort = true) => {
+    const loadItems = useCallback(async (page = 1, isNewSearch = false) => {
         if (isLoading) return;
 
         setIsLoading(true);
         try {
-            // Запрашиваем сортировку по ID с сервера
-            const response = await itemsApi.getItems(page, 20, debouncedSearchTerm, 'id');
-
-            const validatedItems = validateAndFixItems(
-                response.items,
-                isNewSearch ? [] : items
-            );
-
-            let processedItems = validatedItems;
-
-            // Сортируем только если это новая загрузка или первая страница
-            if (shouldSort && (isNewSearch || page === 1)) {
-                processedItems = sortItemsById(validatedItems);
-            }
+            const response = await itemsApi.getItems(page, 20, debouncedSearchTerm);
 
             if (isNewSearch || page === 1) {
-                setItems(processedItems);
+                setItems(response.items);
+                setFilteredItems(response.items);
             } else {
-                // Для последующих страниц просто добавляем к существующим
+                // Простая проверка на дубликаты при добавлении новых элементов
                 const existingIds = new Set(items.map(item => item.id));
-                const uniqueNewItems = processedItems.filter(item =>
+                const uniqueNewItems = response.items.filter(item =>
                     !existingIds.has(item.id)
                 );
 
-                if (uniqueNewItems.length !== processedItems.length) {
-                    console.warn('Отфильтрованы дублирующиеся элементы при пагинации');
+                if (uniqueNewItems.length !== response.items.length) {
+                    console.warn('Отфильтрованы дублирующиеся элементы при пагинации:', {
+                        received: response.items.length,
+                        added: uniqueNewItems.length
+                    });
                 }
 
-                // Объединяем и пересортируем ВСЕ элементы
-                const allItems = [...items, ...uniqueNewItems];
-                const finalSortedItems = sortItemsById(allItems);
-
-                setItems(finalSortedItems);
+                setItems(prev => [...prev, ...uniqueNewItems]);
+                setFilteredItems(prev => [...prev, ...uniqueNewItems]);
             }
 
             setHasMore(response.hasMore);
@@ -115,9 +52,9 @@ export function useItems() {
             console.log('Загружены элементы:', {
                 page: page,
                 search: debouncedSearchTerm,
-                items: processedItems.length,
+                received: response.items.length,
                 total: response.total,
-                sorted: shouldSort
+                hasMore: response.hasMore
             });
 
         } catch (error) {
@@ -125,24 +62,18 @@ export function useItems() {
         } finally {
             setIsLoading(false);
         }
-    }, [isLoading, items, validateAndFixItems, debouncedSearchTerm, sortItemsById]);
+    }, [debouncedSearchTerm, isLoading, items]);
 
     const loadMore = useCallback(() => {
         if (hasMore && !isLoading) {
-            loadItems(currentPage + 1, false, true); // Всегда сортируем при подгрузке
+            loadItems(currentPage + 1, false);
         }
     }, [hasMore, isLoading, currentPage, loadItems]);
 
     useInfiniteScroll(loadMore);
 
-    // Загружаем сначала элементы с меньшими ID
     useEffect(() => {
-        setItems([]);
-        setCurrentPage(1);
-        setHasMore(true);
-
-        // Загружаем первую страницу с сортировкой
-        loadItems(1, true, true);
+        loadItems(1, true);
     }, [debouncedSearchTerm]);
 
     useEffect(() => {
@@ -150,12 +81,14 @@ export function useItems() {
             try {
                 const state = await itemsApi.getState();
 
+                // Валидируем выбранные элементы
                 const validSelectedItems = Array.isArray(state.selectedItems)
                     ? state.selectedItems.filter(id => id !== undefined && id !== null)
                     : [];
 
                 setSelectedItems(new Set(validSelectedItems));
 
+                // Валидируем порядок элементов
                 const validItemOrder = Array.isArray(state.itemOrder)
                     ? state.itemOrder.filter(id => id !== undefined && id !== null)
                     : [];
@@ -168,12 +101,6 @@ export function useItems() {
 
         loadState();
     }, []);
-
-    // Сброс фильтрации при перезагрузке страницы
-    useEffect(() => {
-        // Этот эффект выполнится только при первоначальной загрузке компонента
-        setSearchTerm(''); // Сбрасываем поисковый запрос
-    }, []); // Пустой массив зависимостей = выполняется только при монтировании
 
     const toggleSelection = useCallback(async (id) => {
         if (!id) {
@@ -189,6 +116,7 @@ export function useItems() {
                 newSelected.add(id);
             }
 
+            // Сохраняем только валидные ID
             const validSelection = Array.from(newSelected).filter(itemId =>
                 itemId !== undefined && itemId !== null
             );
@@ -201,7 +129,7 @@ export function useItems() {
     const toggleSelectAll = useCallback(async (selectAll) => {
         setSelectedItems(prev => {
             const newSelected = new Set(prev);
-            const visibleIds = items
+            const visibleIds = filteredItems
                 .map(item => item.id)
                 .filter(id => id !== undefined && id !== null);
 
@@ -214,7 +142,7 @@ export function useItems() {
             itemsApi.saveSelection(Array.from(newSelected));
             return newSelected;
         });
-    }, [items]);
+    }, [filteredItems]);
 
     const updateItemOrder = useCallback(async (newOrder) => {
         if (!Array.isArray(newOrder)) {
@@ -222,37 +150,36 @@ export function useItems() {
             return;
         }
 
+        // Фильтруем валидные ID
         const validOrder = newOrder.filter(id =>
             id !== undefined && id !== null && items.some(item => item.id === id)
         );
 
         if (validOrder.length !== newOrder.length) {
-            console.warn('Отфильтрованы невалидные ID при изменении порядка');
+            console.warn('Отфильтрованы невалидные ID при изменении порядка:', {
+                original: newOrder.length,
+                valid: validOrder.length
+            });
         }
 
         setItemOrder(validOrder);
         await itemsApi.saveOrder(validOrder);
     }, [items]);
 
-    // Функция для принудительной пересортировки
-    const reorderItems = useCallback(() => {
-        const sortedItems = sortItemsById(items);
-        setItems(sortedItems);
-    }, [items, sortItemsById]);
-
     const clearSearch = useCallback(() => {
         setSearchTerm('');
     }, []);
 
+    // Функция для принудительной перезагрузки данных
     const refreshData = useCallback(() => {
         setItems([]);
+        setFilteredItems([]);
         setCurrentPage(1);
-        setSearchTerm(''); // Сбрасываем поиск при ручной перезагрузке
-        loadItems(1, true, true);
+        loadItems(1, true);
     }, [loadItems]);
 
     return {
-        items: items,
+        items: filteredItems,
         selectedItems,
         searchTerm,
         setSearchTerm,
@@ -265,7 +192,6 @@ export function useItems() {
         updateItemOrder,
         clearSearch,
         loadMore,
-        refreshData,
-        reorderItems
+        refreshData
     };
 }

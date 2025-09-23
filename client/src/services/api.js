@@ -59,22 +59,46 @@ apiClient.interceptors.response.use(
     }
 );
 
-export const itemsApi = {
-    getItems: async (page = 1, limit = 100, search = '') => {
-        try {
-            const response = await apiClient.get('/items', {
-                params: {
-                    page: Math.max(1, page),
-                    limit: Math.max(1, Math.min(limit, 1000)), // Ограничиваем лимит
-                    search
-                }
-            });
+const sortItemsById = (items) => {
+    if (!Array.isArray(items)) return items;
 
-            // Дополнительная валидация
+    return [...items].sort((a, b) => {
+        if (!a || !b) return 0;
+
+        // Для числовых ID
+        if (typeof a.id === 'number' && typeof b.id === 'number') {
+            return a.id - b.id;
+        }
+        // Для строковых ID или смешанных типов
+        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+    });
+};
+
+export const itemsApi = {
+    getItems: async (page = 1, limit = 20, search = '') => { // Изменил limit по умолчанию на 20
+        try {
+            const params = {
+                page: Math.max(1, page),
+                limit: Math.max(1, Math.min(limit, 1000)) // Ограничиваем максимальный лимит
+            };
+
+            // Добавляем search параметр только если он не пустой
+            if (search && search.trim() !== '') {
+                params.search = search.trim();
+            }
+
+            const response = await apiClient.get('/items', { params });
+
+            // Дополнительная валидация и сортировка на клиенте
             if (response.data && Array.isArray(response.data.items)) {
+                const validatedItems = validateItemsData(response.data.items);
+
+                // Всегда сортируем по ID на клиенте
+                const sortedItems = sortItemsById(validatedItems);
+
                 return {
                     ...response.data,
-                    items: validateItemsData(response.data.items)
+                    items: sortedItems
                 };
             }
 
