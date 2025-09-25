@@ -58,6 +58,12 @@ export const TableHeader = ({
             >
                 Значение {getSortIndicator('value')}
             </th>
+            <th
+                className={getHeaderClassName('custom')}
+                onClick={() => handleSort('custom')}
+            >
+                📍 Мои {getSortIndicator('custom')}
+            </th>
             <th>Действия</th>
         </tr>
         </thead>

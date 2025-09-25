@@ -61,6 +61,60 @@ export function useItems() {
         saveToStorage(STORAGE_KEYS.SORT_ORDER, sortOrder);
     }, [sortOrder]);
 
+    // 🔑 Функция для применения кастомной сортировки
+    const applyCustomSorting = useCallback((itemsToSort, customOrder) => {
+        if (!customOrder.length || !itemsToSort.length) return itemsToSort;
+
+        const orderMap = new Map();
+        customOrder.forEach((id, index) => orderMap.set(id, index));
+
+        return [...itemsToSort].sort((a, b) => {
+            const orderA = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
+            const orderB = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
+            return orderA - orderB;
+        });
+    }, []);
+
+    // 🔑 Функция для применения сортировки к загруженным элементам
+    const applySorting = useCallback((itemsToSort, sortBy, sortOrder, itemOrder, searchTerm) => {
+        if (!itemsToSort.length) return itemsToSort;
+
+        // Если есть поиск - не применяем кастомную сортировку
+        if (searchTerm) {
+            return itemsToSort;
+        }
+
+        // Применяем кастомную сортировку если выбрана и есть порядок
+        if (sortBy === 'custom' && itemOrder.length > 0) {
+            return applyCustomSorting(itemsToSort, itemOrder);
+        }
+
+        // Стандартная сортировка по полям
+        const sortDirection = sortOrder === 'desc' ? -1 : 1;
+
+        return [...itemsToSort].sort((a, b) => {
+            let aValue = a[sortBy];
+            let bValue = b[sortBy];
+
+            // Handle undefined values
+            if (aValue === undefined || aValue === null) aValue = '';
+            if (bValue === undefined || bValue === null) bValue = '';
+
+            // For numeric fields (id, value)
+            if (sortBy === 'id' || sortBy === 'value') {
+                aValue = Number(aValue) || 0;
+                bValue = Number(bValue) || 0;
+                return (aValue - bValue) * sortDirection;
+            }
+            // For string fields (name, description)
+            else {
+                aValue = String(aValue || '').toLowerCase();
+                bValue = String(bValue || '').toLowerCase();
+                return aValue.localeCompare(bValue) * sortDirection;
+            }
+        });
+    }, [applyCustomSorting]);
+
     const loadItems = useCallback(async (page = 1, isNewSearch = false) => {
         if (isLoading) return;
 
@@ -70,28 +124,36 @@ export function useItems() {
                 page,
                 20,
                 debouncedSearchTerm,
-                sortBy,
+                // 🔑 Не передаем кастомную сортировку на сервер - обрабатываем локально
+                sortBy === 'custom' ? 'id' : sortBy,
                 sortOrder
             );
 
+            let processedItems = response.items;
+
             if (isNewSearch || page === 1) {
-                setItems(response.items);
-                setFilteredItems(response.items);
+                setItems(processedItems);
+                // 🔑 Применяем сортировку после установки элементов
+                const sortedItems = applySorting(processedItems, sortBy, sortOrder, itemOrder, debouncedSearchTerm);
+                setFilteredItems(sortedItems);
             } else {
                 const existingIds = new Set(items.map(item => item.id));
-                const uniqueNewItems = response.items.filter(item =>
+                const uniqueNewItems = processedItems.filter(item =>
                     !existingIds.has(item.id)
                 );
 
-                if (uniqueNewItems.length !== response.items.length) {
+                if (uniqueNewItems.length !== processedItems.length) {
                     console.warn('Отфильтрованы дублирующиеся элементы при пагинации:', {
-                        received: response.items.length,
+                        received: processedItems.length,
                         added: uniqueNewItems.length
                     });
                 }
 
-                setItems(prev => [...prev, ...uniqueNewItems]);
-                setFilteredItems(prev => [...prev, ...uniqueNewItems]);
+                const newItems = [...items, ...uniqueNewItems];
+                setItems(newItems);
+                // 🔑 Применяем сортировку ко всем элементам
+                const sortedItems = applySorting(newItems, sortBy, sortOrder, itemOrder, debouncedSearchTerm);
+                setFilteredItems(sortedItems);
             }
 
             setHasMore(response.hasMore);
@@ -103,6 +165,7 @@ export function useItems() {
                 search: debouncedSearchTerm,
                 sortBy,
                 sortOrder,
+                customOrder: itemOrder.length,
                 received: response.items.length,
                 total: response.total,
                 hasMore: response.hasMore
@@ -113,7 +176,15 @@ export function useItems() {
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearchTerm, sortBy, sortOrder, isLoading, items]);
+    }, [debouncedSearchTerm, sortBy, sortOrder, isLoading, items, itemOrder, applySorting]);
+
+    // 🔑 Эффект для применения сортировки при изменении параметров сортировки или порядка
+    useEffect(() => {
+        if (items.length > 0) {
+            const sortedItems = applySorting(items, sortBy, sortOrder, itemOrder, debouncedSearchTerm);
+            setFilteredItems(sortedItems);
+        }
+    }, [sortBy, sortOrder, itemOrder, debouncedSearchTerm, items, applySorting]);
 
     const loadMore = useCallback(() => {
         if (hasMore && !isLoading) {
@@ -123,10 +194,12 @@ export function useItems() {
 
     useInfiniteScroll(loadMore);
 
+    // 🔑 Загружаем начальные данные
     useEffect(() => {
         loadItems(1, true);
-    }, [debouncedSearchTerm, sortBy, sortOrder]);
+    }, [debouncedSearchTerm]); // Убрали sortBy, sortOrder из зависимостей
 
+    // 🔑 Загружаем сохраненное состояние при монтировании
     useEffect(() => {
         const loadState = async () => {
             try {
@@ -246,6 +319,8 @@ export function useItems() {
         // 🔑 Сохраняем в API и localStorage
         await itemsApi.saveOrder(validOrder);
         saveToStorage(STORAGE_KEYS.ITEM_ORDER, validOrder);
+
+        // 🔑 Сортировка применится автоматически через эффект выше
     }, [items]);
 
     const clearSearch = useCallback(() => {
@@ -258,15 +333,33 @@ export function useItems() {
         setSortOrder('asc');
     }, []);
 
+    // 🔑 Функция для очистки кастомного порядка
+    const clearCustomOrder = useCallback(async () => {
+        setItemOrder([]);
+        await itemsApi.saveOrder([]);
+        saveToStorage(STORAGE_KEYS.ITEM_ORDER, []);
+
+        if (sortBy === 'custom') {
+            resetSorting();
+        }
+    }, [sortBy, resetSorting]);
+
     // 🔑 Функция для очистки всех данных из localStorage
-    const clearAllStorage = useCallback(() => {
+    const clearAllStorage = useCallback(async () => {
         Object.values(STORAGE_KEYS).forEach(key => {
             localStorage.removeItem(key);
         });
+
         setSortBy('id');
         setSortOrder('asc');
         setSelectedItems(new Set());
         setItemOrder([]);
+
+        // Очищаем на сервере
+        await Promise.all([
+            itemsApi.saveSelection([]),
+            itemsApi.saveOrder([])
+        ]);
     }, []);
 
     const refreshData = useCallback(() => {
@@ -293,8 +386,9 @@ export function useItems() {
         toggleSelectAll,
         updateItemOrder,
         clearSearch,
-        resetSorting, // 🔑 новая функция
-        clearAllStorage, // 🔑 новая функция
+        resetSorting,
+        clearCustomOrder,
+        clearAllStorage,
         loadMore,
         refreshData
     };

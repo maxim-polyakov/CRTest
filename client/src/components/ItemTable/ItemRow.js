@@ -3,7 +3,7 @@ import '../../styles.css';
 
 export const ItemRow = React.memo(({ item, isSelected, onSelect }) => (
     <tr
-        key={item.id} // Добавьте key здесь
+        key={item.id}
         data-id={item.id}
         className={isSelected ? 'selected' : ''}
     >
@@ -18,6 +18,12 @@ export const ItemRow = React.memo(({ item, isSelected, onSelect }) => (
         <td>{item.name}</td>
         <td>{item.description}</td>
         <td>{item.value}</td>
+        <td className="custom-order-cell">
+            {/* Можно добавить индикатор кастомного порядка */}
+            <span className="order-indicator" title="Порядок в кастомной сортировке">
+                ⭐
+            </span>
+        </td>
         <td>
             <span className="drag-handle" title="Перетащите для изменения порядка">
                 ☰
