@@ -119,7 +119,7 @@ app.get('/api/items', (req, res) => {
             total = filteredItems.length;
 
             // Apply custom order ONLY if no search
-            if (itemsState.itemOrder.length > 0 && !search && normalizedSortBy === 'custom') {
+            if (itemsState.itemOrder.length > 0 && !search && normalizedSortBy === 'id') {
                 const orderMap = new Map();
                 itemsState.itemOrder.forEach((id, index) => orderMap.set(id, index));
 
