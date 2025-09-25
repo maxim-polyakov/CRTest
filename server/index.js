@@ -59,9 +59,9 @@ app.get('/api/items', (req, res) => {
     const {
         page = 1,
         limit = 20,
-        search,
-        sortBy,
-        sortOrder
+        search = '',
+        sortBy = 'id',
+        sortOrder = 'asc'
     } = req.query;
 
     // Normalize parameters to handle case insensitivity
