@@ -110,10 +110,7 @@ app.get('/api/items', (req, res) => {
             if (search && search.trim() !== '') {
                 const searchTerm = search.trim().toLowerCase();
                 filteredItems = itemsState.items.filter(item =>
-                    item.name && item.name.toLowerCase().includes(searchTerm) ||
-                    item.id.toString().toLowerCase().includes(searchTerm) ||
-                    (item.description && item.description.toLowerCase().includes(searchTerm)) ||
-                    (item.value && item.value.toString().toLowerCase().includes(searchTerm))
+                    item.id.toString().toLowerCase().includes(searchTerm)
                 );
             } else {
                 filteredItems = [...itemsState.items];
