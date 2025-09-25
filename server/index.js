@@ -54,50 +54,75 @@ setInterval(() => {
     }
 }, 60000);
 
-// Получение элементов с пагинацией и оптимизацией
+// Получение элементов с пагинацией, сортировкой и оптимизацией
 app.get('/api/items', (req, res) => {
+    const {
+        page = 1,
+        limit = 20,
+        search,
+        sortBy,
+        sortOrder
+    } = req.query;
 
-    const { page = 1, limit = 20, search = '' } = req.query;
+    // Normalize parameters to handle case insensitivity
+    const normalizedSortBy = sortBy.toLowerCase();
+    const normalizedSortOrder = sortOrder.toLowerCase();
+
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const startIndex = (pageNum - 1) * limitNum;
 
-    // Проверка валидности параметров
+    // Validate pagination parameters
     if (pageNum < 1 || limitNum < 1 || limitNum > 1000) {
         return res.status(400).json({
             error: 'Неверные параметры пагинации'
         });
     }
 
-    // Ключ для кэширования
-    const cacheKey = `${search}-${JSON.stringify(itemsState.itemOrder)}`;
+    // Validate sorting parameters
+    const validSortFields = ['id', 'name', 'description', 'value'];
+    const validSortOrders = ['asc', 'desc'];
+
+    if (!validSortFields.includes(normalizedSortBy)) {
+        return res.status(400).json({
+            error: `Неверное поле для сортировки. Допустимые значения: ${validSortFields.join(', ')}`
+        });
+    }
+
+    if (!validSortOrders.includes(normalizedSortOrder)) {
+        return res.status(400).json({
+            error: 'Неверный порядок сортировки. Допустимые значения: asc, desc'
+        });
+    }
+
+    const cacheKey = `${search}-${normalizedSortBy}-${normalizedSortOrder}-${JSON.stringify(itemsState.itemOrder)}`;
 
     try {
         let filteredItems;
         let total;
 
-        // Используем кэш для поисковых запросов
         if (search && searchCache.has(cacheKey)) {
             const cached = searchCache.get(cacheKey);
             filteredItems = cached.filteredItems;
             total = cached.total;
         } else {
-            // Фильтрация по поиску - ИСПРАВЛЕННЫЙ ПОИСК
+            // Filter by search
             if (search && search.trim() !== '') {
                 const searchTerm = search.trim().toLowerCase();
                 filteredItems = itemsState.items.filter(item =>
                     item.name && item.name.toLowerCase().includes(searchTerm) ||
                     item.id.toString().toLowerCase().includes(searchTerm) ||
-                    (item.description && item.description.toLowerCase().includes(searchTerm))
+                    (item.description && item.description.toLowerCase().includes(searchTerm)) ||
+                    (item.value && item.value.toString().toLowerCase().includes(searchTerm))
                 );
             } else {
-                filteredItems = [...itemsState.items]; // создаем копию
+                filteredItems = [...itemsState.items];
             }
 
             total = filteredItems.length;
 
-            // Применение пользовательского порядка ТОЛЬКО если нет поиска
-            if (itemsState.itemOrder.length > 0 && !search) {
+            // Apply custom order ONLY if no search
+            if (itemsState.itemOrder.length > 0 && !search && normalizedSortBy === 'id') {
                 const orderMap = new Map();
                 itemsState.itemOrder.forEach((id, index) => orderMap.set(id, index));
 
@@ -106,12 +131,33 @@ app.get('/api/items', (req, res) => {
                     const orderB = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
                     return orderA - orderB;
                 });
-            } else if (!search) {
-                // Если нет пользовательского порядка и нет поиска - сортируем по ID
-                filteredItems.sort((a, b) => a.id - b.id);
+            } else {
+                // Apply sorting based on parameters
+                const sortDirection = normalizedSortOrder === 'desc' ? -1 : 1;
+
+                filteredItems.sort((a, b) => {
+                    let aValue = a[normalizedSortBy];
+                    let bValue = b[normalizedSortBy];
+
+                    // Handle undefined values
+                    if (aValue === undefined || aValue === null) aValue = '';
+                    if (bValue === undefined || bValue === null) bValue = '';
+
+                    // For numeric fields (id, value)
+                    if (normalizedSortBy === 'id' || normalizedSortBy === 'value') {
+                        aValue = Number(aValue) || 0;
+                        bValue = Number(bValue) || 0;
+                        return (aValue - bValue) * sortDirection;
+                    }
+                    // For string fields (name, description)
+                    else {
+                        aValue = String(aValue || '').toLowerCase();
+                        bValue = String(bValue || '').toLowerCase();
+                        return aValue.localeCompare(bValue) * sortDirection;
+                    }
+                });
             }
 
-            // Кэшируем результат поиска
             if (search) {
                 searchCache.set(cacheKey, {
                     filteredItems,
@@ -121,7 +167,7 @@ app.get('/api/items', (req, res) => {
             }
         }
 
-        // Пагинация
+        // Pagination
         const items = filteredItems.slice(startIndex, startIndex + limitNum);
         const hasMore = startIndex + limitNum < total;
 
@@ -130,7 +176,9 @@ app.get('/api/items', (req, res) => {
             total,
             hasMore,
             page: pageNum,
-            limit: limitNum
+            limit: limitNum,
+            sortBy: normalizedSortBy,
+            sortOrder: normalizedSortOrder
         });
 
     } catch (error) {

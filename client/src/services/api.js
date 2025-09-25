@@ -75,11 +75,13 @@ const sortItemsById = (items) => {
 };
 
 export const itemsApi = {
-    getItems: async (page = 1, limit = 20, search = '') => { // Изменил limit по умолчанию на 20
+    getItems: async (page = 1, limit = 20, search = '', sortBy = 'id', sortOrder = 'asc') => {
         try {
             const params = {
                 page: Math.max(1, page),
-                limit: Math.max(1, Math.min(limit, 1000)) // Ограничиваем максимальный лимит
+                limit: Math.max(1, Math.min(limit, 1000)), // ограничиваем лимит
+                sortBy,
+                sortOrder
             };
 
             // Добавляем search параметр только если он не пустой
@@ -89,16 +91,13 @@ export const itemsApi = {
 
             const response = await apiClient.get('/items', { params });
 
-            // Дополнительная валидация и сортировка на клиенте
+            // Дополнительная валидация (сортировку сервер уже сделал)
             if (response.data && Array.isArray(response.data.items)) {
                 const validatedItems = validateItemsData(response.data.items);
 
-                // Всегда сортируем по ID на клиенте
-                const sortedItems = sortItemsById(validatedItems);
-
                 return {
                     ...response.data,
-                    items: sortedItems
+                    items: validatedItems
                 };
             }
 

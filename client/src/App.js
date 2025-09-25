@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React from 'react';
 import { ItemTable } from './components/ItemTable/ItemTable';
 import { useItems } from './hooks/useItems';
 import './styles.css'
@@ -11,82 +11,53 @@ function App() {
         setSearchTerm,
         isLoading,
         totalCount,
+        sortBy,
+        setSortBy,
+        sortOrder,
+        setSortOrder,
         toggleSelection,
         toggleSelectAll,
         updateItemOrder,
-        clearSearch
+        clearSearch,
+        resetSorting,
+        clearAllStorage
     } = useItems();
 
-    const [sortField, setSortField] = useState('');
-    const [sortDirection, setSortDirection] = useState('asc');
-
-    const handleSort = useCallback((field) => {
-        if (sortField === field) {
-            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    const handleSort = (column) => {
+        if (sortBy === column) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
         } else {
-            setSortField(field);
-            setSortDirection('asc');
+            setSortBy(column);
+            setSortOrder('asc');
         }
-    }, [sortField]);
-
-    // Исправленная функция сортировки с проверкой уникальности ID
-    const sortedItems = useMemo(() => {
-        if (!sortField) return items;
-
-        const sorted = [...items].sort((a, b) => {
-            const aValue = a[sortField];
-            const bValue = b[sortField];
-
-            if (typeof aValue === 'string' && typeof bValue === 'string') {
-                return sortDirection === 'asc'
-                    ? aValue.localeCompare(bValue)
-                    : bValue.localeCompare(aValue);
-            }
-
-            return sortDirection === 'asc'
-                ? aValue - bValue
-                : bValue - aValue;
-        });
-
-        // Проверка на дублирующиеся ID после сортировки
-        const ids = sorted.map(item => item.id);
-        const uniqueIds = new Set(ids);
-
-        if (ids.length !== uniqueIds.size) {
-            console.warn('Обнаружены дублирующиеся ID после сортировки!', {
-                field: sortField,
-                direction: sortDirection,
-                duplicates: ids.filter((id, index) => ids.indexOf(id) !== index)
-            });
-        }
-
-        return sorted;
-    }, [items, sortField, sortDirection]);
-
-    // Функция для обработки изменения порядка с учетом сортировки
-    const handleOrderChange = useCallback((newOrder) => {
-        // Если активна сортировка, игнорируем изменение порядка через перетаскивание
-        if (sortField) {
-            console.warn('Изменение порядка отключено при активной сортировке');
-            return;
-        }
-        updateItemOrder(newOrder);
-    }, [sortField, updateItemOrder]);
+    };
 
     return (
         <div style={{ padding: '20px', background: '#f5f5f5', minHeight: '100vh' }}>
+            {/* Добавьте кнопки для управления */}
+            <div style={{ marginBottom: '10px' }}>
+                <button onClick={resetSorting} style={{ marginRight: '10px' }}>
+                    Сбросить сортировку
+                </button>
+                <button onClick={clearAllStorage} style={{ marginRight: '10px' }}>
+                    Очистить все данные
+                </button>
+            </div>
+
             <ItemTable
-                items={sortedItems}
+                items={items}
                 selectedItems={selectedItems}
                 searchTerm={searchTerm}
                 isLoading={isLoading}
                 totalCount={totalCount}
+                sortBy={sortBy}
+                sortOrder={sortOrder}
                 onSearchChange={setSearchTerm}
                 onClearSearch={clearSearch}
                 onSelect={toggleSelection}
                 onSelectAll={toggleSelectAll}
                 onSort={handleSort}
-                onOrderChange={handleOrderChange}
+                onOrderChange={updateItemOrder}
             />
         </div>
     );

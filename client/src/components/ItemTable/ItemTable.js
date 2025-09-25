@@ -12,6 +12,8 @@ export const ItemTable = ({
                               searchTerm,
                               isLoading,
                               totalCount,
+                              sortBy, // добавьте этот пропс
+                              sortOrder, // добавьте этот пропс
                               onSearchChange,
                               onClearSearch,
                               onSelect,
@@ -76,7 +78,7 @@ export const ItemTable = ({
                 sortableRef.current = null;
             }
         };
-    }, [items, onOrderChange]); // items в зависимостях
+    }, [items, onOrderChange]);
 
     const allSelected = items.length > 0 && selectedItems.size > 0 &&
         items.every(item => selectedItems.has(item.id));
@@ -104,6 +106,7 @@ export const ItemTable = ({
         }
     }, [items]);
 
+
     return (
         <div className="container">
             <h1>Управление элементами (1-1,000,000)</h1>
@@ -117,6 +120,11 @@ export const ItemTable = ({
             <div className="stats">
                 Найдено: {totalCount} элементов |
                 Выбрано: {selectedItems.size}
+                {sortBy && (
+                    <span style={{color: 'blue', marginLeft: '10px'}}>
+                        🔒 Сортировка по {sortBy} ({sortOrder === 'asc' ? '↑' : '↓'})
+                    </span>
+                )}
                 {items.length > 0 && !checkDuplicateIds() && (
                     <span style={{color: 'red', marginLeft: '10px'}}>
                         ⚠️ Обнаружены дублирующиеся ID!
@@ -130,11 +138,13 @@ export const ItemTable = ({
                         onSelectAll={onSelectAll}
                         allSelected={allSelected}
                         onSort={onSort}
+                        sortBy={sortBy} // передаем текущую сортировку
+                        sortOrder={sortOrder} // передаем порядок сортировки
                     />
                     <tbody ref={tableBodyRef}>
                     {items.map((item, index) => (
                         <ItemRow
-                            key={`${item.id}-${index}`} // Комбинированный ключ для безопасности
+                            key={`${item.id}-${index}`}
                             item={item}
                             isSelected={selectedItems.has(item.id)}
                             onSelect={onSelect}

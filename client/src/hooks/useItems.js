@@ -4,6 +4,33 @@ import { useDebounce } from './useDebounce';
 import { useInfiniteScroll } from './useInfiniteScroll';
 import '../styles.css'
 
+// Ключи для localStorage
+const STORAGE_KEYS = {
+    SORT_BY: 'items_sort_by',
+    SORT_ORDER: 'items_sort_order',
+    SELECTED_ITEMS: 'items_selected',
+    ITEM_ORDER: 'items_order'
+};
+
+// Функции для работы с localStorage
+const loadFromStorage = (key, defaultValue) => {
+    try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+        console.error(`Error loading ${key} from storage:`, error);
+        return defaultValue;
+    }
+};
+
+const saveToStorage = (key, value) => {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+        console.error(`Error saving ${key} to storage:`, error);
+    }
+};
+
 export function useItems() {
     const [items, setItems] = useState([]);
     const [filteredItems, setFilteredItems] = useState([]);
@@ -15,20 +42,42 @@ export function useItems() {
     const [totalCount, setTotalCount] = useState(0);
     const [itemOrder, setItemOrder] = useState([]);
 
+    // 🔑 Загружаем состояние сортировки из localStorage
+    const [sortBy, setSortBy] = useState(() =>
+        loadFromStorage(STORAGE_KEYS.SORT_BY, 'id')
+    );
+    const [sortOrder, setSortOrder] = useState(() =>
+        loadFromStorage(STORAGE_KEYS.SORT_ORDER, 'asc')
+    );
+
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+    // 🔑 Сохраняем сортировку в localStorage при изменении
+    useEffect(() => {
+        saveToStorage(STORAGE_KEYS.SORT_BY, sortBy);
+    }, [sortBy]);
+
+    useEffect(() => {
+        saveToStorage(STORAGE_KEYS.SORT_ORDER, sortOrder);
+    }, [sortOrder]);
 
     const loadItems = useCallback(async (page = 1, isNewSearch = false) => {
         if (isLoading) return;
 
         setIsLoading(true);
         try {
-            const response = await itemsApi.getItems(page, 20, debouncedSearchTerm);
+            const response = await itemsApi.getItems(
+                page,
+                20,
+                debouncedSearchTerm,
+                sortBy,
+                sortOrder
+            );
 
             if (isNewSearch || page === 1) {
                 setItems(response.items);
                 setFilteredItems(response.items);
             } else {
-                // Простая проверка на дубликаты при добавлении новых элементов
                 const existingIds = new Set(items.map(item => item.id));
                 const uniqueNewItems = response.items.filter(item =>
                     !existingIds.has(item.id)
@@ -50,8 +99,10 @@ export function useItems() {
             setTotalCount(response.total);
 
             console.log('Загружены элементы:', {
-                page: page,
+                page,
                 search: debouncedSearchTerm,
+                sortBy,
+                sortOrder,
                 received: response.items.length,
                 total: response.total,
                 hasMore: response.hasMore
@@ -62,7 +113,7 @@ export function useItems() {
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearchTerm, isLoading, items]);
+    }, [debouncedSearchTerm, sortBy, sortOrder, isLoading, items]);
 
     const loadMore = useCallback(() => {
         if (hasMore && !isLoading) {
@@ -74,7 +125,7 @@ export function useItems() {
 
     useEffect(() => {
         loadItems(1, true);
-    }, [debouncedSearchTerm]);
+    }, [debouncedSearchTerm, sortBy, sortOrder]);
 
     useEffect(() => {
         const loadState = async () => {
@@ -94,8 +145,31 @@ export function useItems() {
                     : [];
 
                 setItemOrder(validItemOrder);
+
+                // 🔑 Также загружаем из localStorage для резервного копирования
+                const storedSelected = loadFromStorage(STORAGE_KEYS.SELECTED_ITEMS, []);
+                if (storedSelected.length > 0) {
+                    setSelectedItems(prev => {
+                        const newSet = new Set(prev);
+                        storedSelected.forEach(id => newSet.add(id));
+                        return newSet;
+                    });
+                }
+
+                const storedOrder = loadFromStorage(STORAGE_KEYS.ITEM_ORDER, []);
+                if (storedOrder.length > 0) {
+                    setItemOrder(storedOrder);
+                }
+
             } catch (error) {
                 console.error('Error loading state:', error);
+
+                // 🔑 Если API недоступно, загружаем из localStorage
+                const storedSelected = loadFromStorage(STORAGE_KEYS.SELECTED_ITEMS, []);
+                const storedOrder = loadFromStorage(STORAGE_KEYS.ITEM_ORDER, []);
+
+                setSelectedItems(new Set(storedSelected));
+                setItemOrder(storedOrder);
             }
         };
 
@@ -116,12 +190,14 @@ export function useItems() {
                 newSelected.add(id);
             }
 
-            // Сохраняем только валидные ID
             const validSelection = Array.from(newSelected).filter(itemId =>
                 itemId !== undefined && itemId !== null
             );
 
+            // 🔑 Сохраняем в API и localStorage
             itemsApi.saveSelection(validSelection);
+            saveToStorage(STORAGE_KEYS.SELECTED_ITEMS, validSelection);
+
             return newSelected;
         });
     }, []);
@@ -139,7 +215,11 @@ export function useItems() {
                 visibleIds.forEach(id => newSelected.delete(id));
             }
 
-            itemsApi.saveSelection(Array.from(newSelected));
+            const validSelection = Array.from(newSelected);
+
+            itemsApi.saveSelection(validSelection);
+            saveToStorage(STORAGE_KEYS.SELECTED_ITEMS, validSelection);
+
             return newSelected;
         });
     }, [filteredItems]);
@@ -150,7 +230,6 @@ export function useItems() {
             return;
         }
 
-        // Фильтруем валидные ID
         const validOrder = newOrder.filter(id =>
             id !== undefined && id !== null && items.some(item => item.id === id)
         );
@@ -163,14 +242,33 @@ export function useItems() {
         }
 
         setItemOrder(validOrder);
+
+        // 🔑 Сохраняем в API и localStorage
         await itemsApi.saveOrder(validOrder);
+        saveToStorage(STORAGE_KEYS.ITEM_ORDER, validOrder);
     }, [items]);
 
     const clearSearch = useCallback(() => {
         setSearchTerm('');
     }, []);
 
-    // Функция для принудительной перезагрузки данных
+    // 🔑 Функция для сброса сортировки к значениям по умолчанию
+    const resetSorting = useCallback(() => {
+        setSortBy('id');
+        setSortOrder('asc');
+    }, []);
+
+    // 🔑 Функция для очистки всех данных из localStorage
+    const clearAllStorage = useCallback(() => {
+        Object.values(STORAGE_KEYS).forEach(key => {
+            localStorage.removeItem(key);
+        });
+        setSortBy('id');
+        setSortOrder('asc');
+        setSelectedItems(new Set());
+        setItemOrder([]);
+    }, []);
+
     const refreshData = useCallback(() => {
         setItems([]);
         setFilteredItems([]);
@@ -187,10 +285,16 @@ export function useItems() {
         hasMore,
         totalCount,
         itemOrder,
+        sortBy,
+        setSortBy,
+        sortOrder,
+        setSortOrder,
         toggleSelection,
         toggleSelectAll,
         updateItemOrder,
         clearSearch,
+        resetSorting, // 🔑 новая функция
+        clearAllStorage, // 🔑 новая функция
         loadMore,
         refreshData
     };
