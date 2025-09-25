@@ -80,7 +80,7 @@ app.get('/api/items', (req, res) => {
     }
 
     // Validate sorting parameters
-    const validSortFields = ['id', 'name', 'description', 'value'];
+    const validSortFields = ['id', 'name', 'description', 'value', 'custom'];
     const validSortOrders = ['asc', 'desc'];
 
     if (!validSortFields.includes(normalizedSortBy)) {

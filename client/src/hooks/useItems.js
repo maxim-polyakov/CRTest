@@ -120,22 +120,28 @@ export function useItems() {
 
         setIsLoading(true);
         try {
+            // 🔑 Передаем кастомный порядок на сервер при кастомной сортировке
+            const customOrder = sortBy === 'custom' ? itemOrder : [];
+
             const response = await itemsApi.getItems(
                 page,
                 20,
                 debouncedSearchTerm,
-                // 🔑 Не передаем кастомную сортировку на сервер - обрабатываем локально
-                sortBy === 'custom' ? 'id' : sortBy,
-                sortOrder
+                sortBy, // 🔑 Теперь передаем 'custom' на сервер
+                sortOrder,
+                customOrder // 🔑 Передаем кастомный порядок
             );
 
             let processedItems = response.items;
 
+            // 🔑 Локально применяем сортировку только если сервер не отсортировал
+            if (sortBy === 'custom' && !debouncedSearchTerm && itemOrder.length > 0) {
+                processedItems = applyCustomSorting(processedItems, itemOrder);
+            }
+
             if (isNewSearch || page === 1) {
                 setItems(processedItems);
-                // 🔑 Применяем сортировку после установки элементов
-                const sortedItems = applySorting(processedItems, sortBy, sortOrder, itemOrder, debouncedSearchTerm);
-                setFilteredItems(sortedItems);
+                setFilteredItems(processedItems);
             } else {
                 const existingIds = new Set(items.map(item => item.id));
                 const uniqueNewItems = processedItems.filter(item =>
@@ -149,11 +155,8 @@ export function useItems() {
                     });
                 }
 
-                const newItems = [...items, ...uniqueNewItems];
-                setItems(newItems);
-                // 🔑 Применяем сортировку ко всем элементам
-                const sortedItems = applySorting(newItems, sortBy, sortOrder, itemOrder, debouncedSearchTerm);
-                setFilteredItems(sortedItems);
+                setItems(prev => [...prev, ...uniqueNewItems]);
+                setFilteredItems(prev => [...prev, ...uniqueNewItems]);
             }
 
             setHasMore(response.hasMore);
@@ -176,9 +179,9 @@ export function useItems() {
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearchTerm, sortBy, sortOrder, isLoading, items, itemOrder, applySorting]);
+    }, [debouncedSearchTerm, sortBy, sortOrder, isLoading, items, itemOrder, applyCustomSorting]);
 
-    // 🔑 Эффект для применения сортировки при изменении параметров сортировки или порядка
+    // 🔑 Эффект для применения сортировки при изменении параметров
     useEffect(() => {
         if (items.length > 0) {
             const sortedItems = applySorting(items, sortBy, sortOrder, itemOrder, debouncedSearchTerm);
@@ -194,10 +197,10 @@ export function useItems() {
 
     useInfiniteScroll(loadMore);
 
-    // 🔑 Загружаем начальные данные
+    // 🔑 Загружаем данные при изменении поиска или сортировки
     useEffect(() => {
         loadItems(1, true);
-    }, [debouncedSearchTerm]); // Убрали sortBy, sortOrder из зависимостей
+    }, [debouncedSearchTerm, sortBy, sortOrder]); // 🔑 Добавляем сортировку в зависимости
 
     // 🔑 Загружаем сохраненное состояние при монтировании
     useEffect(() => {
@@ -320,8 +323,11 @@ export function useItems() {
         await itemsApi.saveOrder(validOrder);
         saveToStorage(STORAGE_KEYS.ITEM_ORDER, validOrder);
 
-        // 🔑 Сортировка применится автоматически через эффект выше
-    }, [items]);
+        // 🔑 Если активна кастомная сортировка - перезагружаем данные
+        if (sortBy === 'custom') {
+            loadItems(1, true);
+        }
+    }, [items, sortBy, loadItems]);
 
     const clearSearch = useCallback(() => {
         setSearchTerm('');
