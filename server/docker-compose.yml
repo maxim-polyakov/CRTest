@@ -10,3 +10,5 @@ services:
     ports:
       - "5016:5000"
     restart: unless-stopped
+    networks:
+      - crc-network

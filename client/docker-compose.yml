@@ -10,3 +10,5 @@ services:
     ports:
       - "3016:3016"
     restart: unless-stopped
+    networks:
+      - crc-network
