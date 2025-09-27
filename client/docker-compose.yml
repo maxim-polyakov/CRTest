@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  client:
+  crtestclient:
     container_name: crclient
     build:
       dockerfile: Dockerfile
