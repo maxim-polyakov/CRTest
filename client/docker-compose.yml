@@ -12,3 +12,6 @@ services:
     restart: unless-stopped
     networks:
       - crc-network
+networks:
+  crc-network:
+    driver: bridge
